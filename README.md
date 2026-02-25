@@ -22,12 +22,14 @@ Note that boost, libjpeg, libpng, and libx11 must be installed on the system.
 
 For basic usage, run the command as follows:
 
-```Image2ASCII <path/to/characterset/file> <path/to/image>```
+```image2ASCII <path/to/characterset/file> <path/to/image>```
 
 This will output the converted text in the terminal with the default settings defined in the program.
 
 Further options include:
 
 ```-w <width>```: The number of characters wide the output should be
+
 ```-a <ratio>```: The aspect ratio of the font used to display the result. (For example, if the font is 20px tall and 10px wide, the ratio should be set to 0.5)
+
 ```-v```: Invert the input image
