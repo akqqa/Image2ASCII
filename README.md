@@ -22,11 +22,13 @@ Note that boost, libjpeg, libpng, and libx11 must be installed on the system.
 
 For basic usage, run the command as follows:
 
-```image2ASCII <path/to/characterset/file> <path/to/image>```
+```image2ASCII <path/to/image>```
 
 This will output the converted text in the terminal with the default settings defined in the program.
 
 Further options include:
+
+```-c <path/to/characterset>```: The path of the character set file to use
 
 ```-w <width>```: The number of characters wide the output should be
 
