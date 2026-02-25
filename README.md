@@ -4,7 +4,7 @@
 
 - Allows an image (JPG/PNG) to be converted into ASCII art.
 - Allows a default character set to be used, OR a custom file with all characters to be used.
-    - Custom file need characters ordered from highest to lowest density.
+    - Custom files need characters ordered from highest to lowest density.
 - Allows the size of the output image to be chosen in terms of width (how many characters wide).
 - Allows the aspect ratio of text characters to be input, to ensure the output image is not warped in the chosen display font.
 - Allows the image to be inverted before conversion.
