@@ -15,11 +15,6 @@ namespace po = boost::program_options;
 
 const float CHAR_ASPECT = 0.4f; // Characters are ~half as wide as they are tall
 
-// Algorithm:
-// read characters, create a mapping of 256 range to characters evenly based on how many there are#
-// calculate size of image, and split into average brightness of each size so one section = one character
-// loop through and assign characters to each
-
 vector<string> getCharacterSet(string filename) {
     ifstream ifs(filename);
     vector<string> characterSet;
@@ -42,7 +37,6 @@ CImg<unsigned char> averageResize(const CImg<unsigned char>& img, int outputWidt
             int x1 = int((x+1) * scaleX);
             int y1 = int((y+1) * scaleY);
 
-            // Crop the block and take average
             CImg<unsigned char> block = img.get_crop(x0, y0, x1-1, y1-1);
             result(x, y) = (unsigned char)block.mean();
         }
@@ -51,7 +45,7 @@ CImg<unsigned char> averageResize(const CImg<unsigned char>& img, int outputWidt
     return result;
 }
 
-// Resizes the image so that one pixel = one character. Has the bonus of performing the average operation for us
+// Resizes the image so that one pixel = one character
 CImg<unsigned char> resizeImage(CImg<unsigned char> image, int outputWidth, float charAspect) {
     int imgWidth = image.width();
     int imgHeight = image.height();
@@ -78,14 +72,11 @@ map<int, string> mapCharacterDensity(vector<string> characterSet, CImg<unsigned 
         }
     }
 
-    // cout << "max brightness: " << maxBrightness << "\n";
-    // cout << "min brightness: " << minBrightness << "\n";
-
     // Divide range by number of character levels
     int numLevels = characterSet.size();
     double intervalSize = double(maxBrightness - minBrightness + 1) / numLevels;
 
-    // Create map - unsure what will happen - can the case of the top level only being say 1 value due to rounding? dont want this
+    // Create map of value to character
     map<int, string> mapping;
     for (int level = 0; level < numLevels; ++level) {
         int upper = int(minBrightness + intervalSize * (level  + 1)) - 1;
@@ -132,9 +123,30 @@ vector<string> renderImage(CImg<unsigned char> image, map<int, string> mapping) 
     return result;
 }
 
+// Run the above methods to convert an input image to a string vector
+vector<string> convertImage(string inputFile, string characterSetFile, int outputWidth, float charAspect, bool invert) {
+    vector<string> characterSet = getCharacterSet(characterSetFile);
+
+    CImg<unsigned char> image(inputFile.c_str());
+    if (image.spectrum() != 3) {
+        image = image.get_channels(0, 2);
+    } else {
+        image = image.RGBtoYCbCr().channel(0);
+    }
+    
+    if (invert) {
+        image = 255 - image;
+    }
+
+    CImg<unsigned char> resizedImage = resizeImage(image, outputWidth, charAspect);
+
+    map<int, string> mapping = mapCharacterDensity(characterSet, resizedImage, true);
+
+    return renderImage(resizedImage, mapping);
+}
+
 int main(int argc, char* argv[]) {
     // Program Options
-
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help,h", "produce help message")
@@ -189,34 +201,11 @@ int main(int argc, char* argv[]) {
         invert = true;
     }
 
-    vector<string> characterSet = getCharacterSet(characterSetFile);
-    // cout << "characters: \n";
-    // for (string chars: characterSet) {
-    //     cout << chars << "\n";
-    // }
-
-    CImg<unsigned char> image(inputFile.c_str());
-    if (image.spectrum() != 3) {
-        image = image.get_channels(0, 2);
-    } else {
-        image = image.RGBtoYCbCr().channel(0);
-    }
-    
-    if (invert) {
-        image = 255 - image;
-    }
-
-    CImg<unsigned char> resizedImage = resizeImage(image, width, charAspect);
-
-    map<int, string> mapping = mapCharacterDensity(characterSet, resizedImage, true);
-
-    // for (auto it = mapping.begin(); it != mapping.end(); ++it) 
-    //     cout << it->first << " " << it->second << endl;
+    vector<string> output = convertImage(inputFile, characterSetFile, width, charAspect, invert);
 
     // Output image!
-    vector<string> renderedImage = renderImage(resizedImage, mapping);
     cout << "\n";
-    for (string line: renderedImage) {
+    for (string line: output) {
         cout << line << "\n";
     }
     cout << "\n";
