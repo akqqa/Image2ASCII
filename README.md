@@ -1,6 +1,6 @@
 # Image2ASCII
 
-# Features
+## Features
 
 - Allows an image (JPG/PNG) to be converted into ASCII art.
 - Allows a default character set to be used, OR a custom file with all characters to be used.
@@ -10,7 +10,7 @@
 - Allows the image to be inverted before conversion.
 
 
-# Compilation
+## Compilation
 
 To compile to program, in the ```src/``` directory run the command:
 
@@ -18,7 +18,7 @@ To compile to program, in the ```src/``` directory run the command:
 
 Note that boost, libjpeg, libpng, and libx11 must be installed on the system.
 
-# Usage
+## Usage
 
 For basic usage, run the command as follows:
 
@@ -35,3 +35,21 @@ Further options include:
 ```-a <ratio>```: The aspect ratio of the font used to display the result. (For example, if the font is 20px tall and 10px wide, the ratio should be set to 0.5)
 
 ```-v```: Invert the input image
+
+# Gif2ASCII
+
+## Features
+
+tba
+
+## Compilation
+
+To compile to program, in the ```src/``` directory run the command:
+
+```g++ gif2ASCII.cpp core.cpp -std=c++17 -O2 -o image2ASCII -ljpeg -lpng -lX11 -lboost_program_options -lgif```
+
+Note that giflib, boost, libjpeg, libpng, and libx11 must be installed on the system.
+
+## Usage
+
+tba
