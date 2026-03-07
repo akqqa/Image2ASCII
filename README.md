@@ -14,7 +14,7 @@
 
 To compile to program, in the ```src/``` directory run the command:
 
-```g++ image2ASCII.cpp -std=c++17 -O2 -o image2ASCII -ljpeg -lpng -lX11 -lboost_program_options```
+```g++ image2ASCII.cpp core.cpp -std=c++17 -O2 -o image2ASCII -ljpeg -lpng -lX11 -lboost_program_options```
 
 Note that boost, libjpeg, libpng, and libx11 must be installed on the system.
 
