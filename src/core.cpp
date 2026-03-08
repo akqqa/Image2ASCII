@@ -117,24 +117,3 @@ vector<string> renderImage(CImg<unsigned char> image, map<int, string> mapping) 
 
     return result;
 }
-
-// Run the above methods to convert an input image to a string vector
-vector<string> convertImage(CImg<unsigned char> image, string characterSetFile, int outputWidth, float charAspect, bool invert) {
-    vector<string> characterSet = getCharacterSet(characterSetFile);
-
-    if (image.spectrum() != 3) {
-        image = image.get_channels(0, 2);
-    } else {
-        image = image.RGBtoYCbCr().channel(0);
-    }
-    
-    if (invert) {
-        image = 255 - image;
-    }
-
-    CImg<unsigned char> resizedImage = resizeImage(image, outputWidth, charAspect);
-
-    map<int, string> mapping = mapCharacterDensity(characterSet, resizedImage, true);
-
-    return renderImage(resizedImage, mapping);
-}

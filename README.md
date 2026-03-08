@@ -46,7 +46,7 @@ tba
 
 To compile to program, in the ```src/``` directory run the command:
 
-```g++ gif2ASCII.cpp core.cpp -std=c++17 -O2 -o image2ASCII -ljpeg -lpng -lX11 -lboost_program_options -lgif```
+```g++ gif2ASCII.cpp core.cpp -std=c++17 -O2 -o gif2ASCII -ljpeg -lpng -lX11 -lboost_program_options -lgif```
 
 Note that giflib, boost, libjpeg, libpng, and libx11 must be installed on the system.
 
