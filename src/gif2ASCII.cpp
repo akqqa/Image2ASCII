@@ -11,21 +11,19 @@ namespace po = boost::program_options;
 
 const string DEFAULT_CHAR_SET = "../character_sets/characters.txt";
 
-CImg<unsigned char> frameToCImg(SavedImage& frame, ColorMapObject* globalColorMap) {
+CImg<unsigned char> frameToCImg(SavedImage& frame, ColorMapObject* globalColorMap, CImg<unsigned char>& canvas) {
     GifImageDesc& desc = frame.ImageDesc;
     ColorMapObject* colorMap = desc.ColorMap ? desc.ColorMap : globalColorMap;
-
-    CImg<unsigned char> image(desc.Width, desc.Height, 1, 1);
 
     for (int y = 0; y < desc.Height; y++) {
         for (int x = 0; x < desc.Width; x++) {
             int idx = frame.RasterBits[y * desc.Width + x];
             GifColorType color = colorMap->Colors[idx];
-            image(x, y, 0, 0) = (unsigned char)(0.299*color.Red + 0.587*color.Green + 0.114*color.Blue);
+            canvas(x + desc.Left, y + desc.Top, 0, 0) = (unsigned char)(0.299*color.Red + 0.587*color.Green + 0.114*color.Blue);
         }
     }
 
-    return image;
+    return canvas;
 }
 
 vector<CImg<unsigned char>> gifToCImgs(string inputFile) {
@@ -34,8 +32,27 @@ vector<CImg<unsigned char>> gifToCImgs(string inputFile) {
     DGifSlurp(gif);
 
     vector<CImg<unsigned char>> frames;
+    CImg<unsigned char> canvas(gif->SWidth, gif->SHeight, 1, 1, 0);
     for (int i = 0; i < gif->ImageCount; i++) {
-        frames.push_back(frameToCImg(gif->SavedImages[i], gif->SColorMap));
+        CImg<unsigned char> previous = canvas; // backup canvas
+
+        SavedImage& frame = gif->SavedImages[i];
+
+        frames.push_back(frameToCImg(frame, gif->SColorMap, canvas));
+
+        // Get the disposal method of the frame from the extension blocks
+        for (int i = 0; i < frame.ExtensionBlockCount; i++) {
+            ExtensionBlock& block = frame.ExtensionBlocks[i];
+            if (block.Function == GRAPHICS_EXT_FUNC_CODE) {
+                int disposal = (block.Bytes[0] >> 3) & 7;
+                if (disposal == 2) { // 2 is code for dispose, so clear canvas
+                    canvas.fill(0);
+                } else if (disposal == 3) {
+                    canvas = previous;
+                }
+            }
+        }
+
     }
 
     DGifCloseFile(gif, &error);
@@ -56,7 +73,7 @@ vector<vector<string>> convertGif(string inputFile, string characterSetFile, int
 
         CImg<unsigned char> resizedFrame = resizeImage(frame, outputWidth, charAspect);
 
-        map<int, string> mapping = mapCharacterDensity(characterSet, resizedFrame, true);
+        map<int, string> mapping = mapCharacterDensity(characterSet, resizedFrame, false);
         convertedFrames.push_back(renderImage(resizedFrame, mapping));
     }
 
@@ -139,3 +156,8 @@ int main(int argc, char* argv[]) {
     
 
 }
+
+
+// issues:
+// lines not being consistent when going back up - solved with frame updates and canvas. still weird for nyan cat??
+// range not correct and when use standard its inverted? idk why at all.
