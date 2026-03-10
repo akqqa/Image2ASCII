@@ -51,7 +51,7 @@ CImg<unsigned char> resizeImage(CImg<unsigned char> image, int outputWidth, floa
     return averageResize(image, outputWidth, outputHeight);
 }
 
-map<int, string> mapCharacterDensity(vector<string> characterSet, CImg<unsigned char> image, bool scaleContrast = true) {
+map<int, string> mapCharacterDensity(vector<string> characterSet, CImg<unsigned char>& image, bool scaleContrast) {
     // Get brightness range of image
     int maxBrightness = 0;
     int minBrightness = 255;
@@ -63,6 +63,43 @@ map<int, string> mapCharacterDensity(vector<string> characterSet, CImg<unsigned 
             }
             if (value < minBrightness) {
                 minBrightness = value;
+            }
+        }
+    }
+
+    // Divide range by number of character levels
+    int numLevels = characterSet.size();
+    double intervalSize = double(maxBrightness - minBrightness + 1) / numLevels;
+
+    // Create map of value to character
+    map<int, string> mapping;
+    for (int level = 0; level < numLevels; ++level) {
+        int upper = int(minBrightness + intervalSize * (level  + 1)) - 1;
+        // Clamp last range to maxBrightness
+        if (level == numLevels - 1) {
+            upper = maxBrightness;
+        }
+
+        mapping.insert({upper, characterSet[level]});
+    }
+
+    return mapping;
+}
+
+map<int, string> mapCharacterDensity(vector<string> characterSet, vector<CImg<unsigned char>>& images, bool scaleContrast) {
+    // Get brightness range of images
+    int maxBrightness = 0;
+    int minBrightness = 255;
+    if (scaleContrast) {
+        for (CImg<unsigned char> image : images) {
+            cimg_forXY(image, x, y) {
+                unsigned char value = image(x, y);
+                if (value > maxBrightness) {
+                    maxBrightness = value;
+                }
+                if (value < minBrightness) {
+                    minBrightness = value;
+                }
             }
         }
     }

@@ -11,22 +11,21 @@ namespace po = boost::program_options;
 
 const string DEFAULT_CHAR_SET = "../character_sets/characters.txt";
 
-CImg<unsigned char> frameToCImg(SavedImage& frame, ColorMapObject* globalColorMap, CImg<unsigned char>& canvas) {
+CImg<unsigned char> frameToCImg(SavedImage& frame, ColorMapObject* globalColorMap, CImg<unsigned char>& canvas, bool hasTransparency, int transparentIndex) {
     GifImageDesc& desc = frame.ImageDesc;
     ColorMapObject* colorMap = desc.ColorMap ? desc.ColorMap : globalColorMap;
-
     for (int y = 0; y < desc.Height; y++) {
         for (int x = 0; x < desc.Width; x++) {
             int idx = frame.RasterBits[y * desc.Width + x];
+            if (hasTransparency && idx == transparentIndex) continue; // Skip transparent pixels
             GifColorType color = colorMap->Colors[idx];
             canvas(x + desc.Left, y + desc.Top, 0, 0) = (unsigned char)(0.299*color.Red + 0.587*color.Green + 0.114*color.Blue);
         }
     }
-
     return canvas;
 }
 
-vector<CImg<unsigned char>> gifToCImgs(string inputFile) {
+vector<CImg<unsigned char>> gifToCImgs(string inputFile, bool dispose = false) {
     int error;
     GifFileType* gif = DGifOpenFileName(inputFile.c_str(), &error);
     DGifSlurp(gif);
@@ -34,35 +33,41 @@ vector<CImg<unsigned char>> gifToCImgs(string inputFile) {
     vector<CImg<unsigned char>> frames;
     CImg<unsigned char> canvas(gif->SWidth, gif->SHeight, 1, 1, 0);
     for (int i = 0; i < gif->ImageCount; i++) {
-        CImg<unsigned char> previous = canvas; // backup canvas
-
+        CImg<unsigned char> previous = canvas;
         SavedImage& frame = gif->SavedImages[i];
 
-        frames.push_back(frameToCImg(frame, gif->SColorMap, canvas));
-
-        // Get the disposal method of the frame from the extension blocks
-        for (int i = 0; i < frame.ExtensionBlockCount; i++) {
-            ExtensionBlock& block = frame.ExtensionBlocks[i];
+        // Extract transparency and disposal before applying frame
+        bool hasTransparency = false;
+        int transparentIndex = -1;
+        int disposal = 0;
+        for (int j = 0; j < frame.ExtensionBlockCount; j++) {
+            ExtensionBlock& block = frame.ExtensionBlocks[j];
             if (block.Function == GRAPHICS_EXT_FUNC_CODE) {
-                int disposal = (block.Bytes[0] >> 3) & 7;
-                if (disposal == 2) { // 2 is code for dispose, so clear canvas
-                    canvas.fill(0);
-                } else if (disposal == 3) {
-                    canvas = previous;
-                }
+                hasTransparency = block.Bytes[0] & 1;
+                transparentIndex = block.Bytes[3];
+                disposal = (block.Bytes[0] >> 3) & 7;
             }
         }
 
+        frames.push_back(frameToCImg(frame, gif->SColorMap, canvas, hasTransparency, transparentIndex));
+
+        if (disposal == 2 || dispose) {
+            canvas.fill(0);
+        } else if (disposal == 3) {
+            canvas = previous;
+        }
     }
 
     DGifCloseFile(gif, &error);
     return frames;
 }
 
-vector<vector<string>> convertGif(string inputFile, string characterSetFile, int outputWidth, float charAspect, bool invert) {
-    vector<CImg<unsigned char>> frames = gifToCImgs(inputFile);
+vector<vector<string>> convertGif(string inputFile, string characterSetFile, int outputWidth, float charAspect, bool invert, bool dispose) {
+    vector<CImg<unsigned char>> frames = gifToCImgs(inputFile, dispose);
 
     vector<string> characterSet = getCharacterSet(characterSetFile);
+
+    map<int, string> mapping = mapCharacterDensity(characterSet, frames);
 
     vector<vector<string>> convertedFrames;
     for (CImg<unsigned char> frame : frames) {
@@ -73,7 +78,6 @@ vector<vector<string>> convertGif(string inputFile, string characterSetFile, int
 
         CImg<unsigned char> resizedFrame = resizeImage(frame, outputWidth, charAspect);
 
-        map<int, string> mapping = mapCharacterDensity(characterSet, resizedFrame, false);
         convertedFrames.push_back(renderImage(resizedFrame, mapping));
     }
 
@@ -89,7 +93,8 @@ int main(int argc, char* argv[]) {
         ("charset,c", po::value<std::string>(), "character set file")
         ("width,w", po::value<int>()->default_value(60), "width of output in characters")
         ("aspect,a", po::value<float>()->default_value(0.4f, "0.4"), "aspect ratio of height to width of characters")
-        ("invert,v", "invert the image");
+        ("invert,v", "invert the image")
+        ("dispose,d", "override to clear gif between each frame (use if there are weird trailing issues in the gif)");
 
     po::positional_options_description p;
     p.add("input", 1);
@@ -122,6 +127,7 @@ int main(int argc, char* argv[]) {
     int width;
     float charAspect;
     bool invert = false;
+    bool dispose = false;
 
     inputFile = vm["input"].as<string>();
     // Manually define as otherwise the default value in --help is annoying
@@ -139,8 +145,11 @@ int main(int argc, char* argv[]) {
     if (vm.count("invert")) {
         invert = true;
     }
+    if (vm.count("dispose")) {
+        dispose = true;
+    }
 
-    vector<vector<string>> convertedFrames = convertGif(inputFile, characterSetFile, width, charAspect, invert);
+    vector<vector<string>> convertedFrames = convertGif(inputFile, characterSetFile, width, charAspect, invert, dispose);
 
     int frameHeight = 0;
     for (vector<string> frame : convertedFrames) {
@@ -159,5 +168,4 @@ int main(int argc, char* argv[]) {
 
 
 // issues:
-// lines not being consistent when going back up - solved with frame updates and canvas. still weird for nyan cat??
-// range not correct and when use standard its inverted? idk why at all.
+// need to implement speed and looping
