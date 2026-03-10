@@ -86,12 +86,13 @@ map<int, string> mapCharacterDensity(vector<string> characterSet, CImg<unsigned 
     return mapping;
 }
 
-map<int, string> mapCharacterDensity(vector<string> characterSet, vector<CImg<unsigned char>>& images, bool scaleContrast) {
-    // Get brightness range of images
+map<int, string> mapCharacterDensity(vector<string> characterSet, vector<GifFrame>& frames, bool scaleContrast) {
+    // Get brightness range of frames
     int maxBrightness = 0;
     int minBrightness = 255;
     if (scaleContrast) {
-        for (CImg<unsigned char> image : images) {
+        for (GifFrame frameData : frames) {
+            CImg<unsigned char> image = frameData.image;
             cimg_forXY(image, x, y) {
                 unsigned char value = image(x, y);
                 if (value > maxBrightness) {

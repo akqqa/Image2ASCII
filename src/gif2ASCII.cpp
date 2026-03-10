@@ -25,33 +25,32 @@ CImg<unsigned char> frameToCImg(SavedImage& frame, ColorMapObject* globalColorMa
     return canvas;
 }
 
-vector<CImg<unsigned char>> gifToCImgs(string inputFile, bool dispose = false) {
+vector<GifFrame> gifToCImgs(string inputFile, bool dispose = false) {
     int error;
     GifFileType* gif = DGifOpenFileName(inputFile.c_str(), &error);
     DGifSlurp(gif);
 
-    vector<CImg<unsigned char>> frames;
+    vector<GifFrame> frames;
     CImg<unsigned char> canvas(gif->SWidth, gif->SHeight, 1, 1, 0);
     for (int i = 0; i < gif->ImageCount; i++) {
         CImg<unsigned char> previous = canvas;
         SavedImage& frame = gif->SavedImages[i];
 
         // Extract transparency and disposal before applying frame
-        bool hasTransparency = false;
-        int transparentIndex = -1;
-        int disposal = 0;
-        for (int j = 0; j < frame.ExtensionBlockCount; j++) {
-            ExtensionBlock& block = frame.ExtensionBlocks[j];
-            if (block.Function == GRAPHICS_EXT_FUNC_CODE) {
-                hasTransparency = block.Bytes[0] & 1;
-                transparentIndex = block.Bytes[3];
-                disposal = (block.Bytes[0] >> 3) & 7;
-            }
-        }
+        GraphicsControlBlock gcb;
+        DGifSavedExtensionToGCB(gif, i, &gcb);
 
-        frames.push_back(frameToCImg(frame, gif->SColorMap, canvas, hasTransparency, transparentIndex));
+        bool hasTransparency = gcb.TransparentColor != NO_TRANSPARENT_COLOR;
+        int transparentIndex = gcb.TransparentColor;
+        int disposal = gcb.DisposalMode;
+        int delay = gcb.DelayTime;
 
-        if (disposal == 2 || dispose) {
+        CImg<unsigned char> image = frameToCImg(frame, gif->SColorMap, canvas, hasTransparency, transparentIndex);
+        GifFrame frameData(image, delay);
+
+        frames.push_back(frameData);
+
+        if (disposal == 2 || dispose) { // Manual dispose flag included
             canvas.fill(0);
         } else if (disposal == 3) {
             canvas = previous;
@@ -62,15 +61,17 @@ vector<CImg<unsigned char>> gifToCImgs(string inputFile, bool dispose = false) {
     return frames;
 }
 
-vector<vector<string>> convertGif(string inputFile, string characterSetFile, int outputWidth, float charAspect, bool invert, bool dispose) {
-    vector<CImg<unsigned char>> frames = gifToCImgs(inputFile, dispose);
+vector<GifFrame> convertGif(string inputFile, string characterSetFile, int outputWidth, float charAspect, bool invert, bool dispose) {
+    vector<GifFrame> frames = gifToCImgs(inputFile, dispose);
 
     vector<string> characterSet = getCharacterSet(characterSetFile);
 
     map<int, string> mapping = mapCharacterDensity(characterSet, frames);
 
-    vector<vector<string>> convertedFrames;
-    for (CImg<unsigned char> frame : frames) {
+    vector<GifFrame> convertedFrames;
+    for (GifFrame frameData : frames) {
+
+        CImg<unsigned char> frame = frameData.image;
 
         if (invert) {
             frame = 255 - frame;
@@ -78,7 +79,9 @@ vector<vector<string>> convertGif(string inputFile, string characterSetFile, int
 
         CImg<unsigned char> resizedFrame = resizeImage(frame, outputWidth, charAspect);
 
-        convertedFrames.push_back(renderImage(resizedFrame, mapping));
+        frameData.ascii = renderImage(resizedFrame, mapping);
+
+        convertedFrames.push_back(frameData);
     }
 
     return convertedFrames;
@@ -149,23 +152,27 @@ int main(int argc, char* argv[]) {
         dispose = true;
     }
 
-    vector<vector<string>> convertedFrames = convertGif(inputFile, characterSetFile, width, charAspect, invert, dispose);
+    vector<GifFrame> convertedFrames = convertGif(inputFile, characterSetFile, width, charAspect, invert, dispose);
 
     int frameHeight = 0;
-    for (vector<string> frame : convertedFrames) {
+    int frameCounter = 0;
+    while(true) {
+        GifFrame frameData = convertedFrames[frameCounter];
+
+        vector<string> frame = frameData.ascii;
+
         cout << "\033[" << frameHeight << "A";
-        frameHeight = frame.size() + 2; // + 2 for the two \ns
+        frameHeight = frame.size() + 1; // + 1 for the \n
         cout << "\n";
         for (string line: frame) {
             cout << line << "\n";
         }
-        cout << "\n";
-        usleep(100000);
+        usleep(frameData.delay * 10000);
+
+        frameCounter = (frameCounter + 1) % convertedFrames.size();
     }
-    
 
 }
-
 
 // issues:
 // need to implement speed and looping
