@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <boost/program_options.hpp>
+#include <gif_lib.h>
 using namespace std;
 
 namespace po = boost::program_options;
@@ -28,6 +29,84 @@ vector<string> convertImage(CImg<unsigned char> image, string characterSetFile, 
     map<int, string> mapping = mapCharacterDensity(characterSet, resizedImage, true);
 
     return renderImage(resizedImage, mapping);
+}
+
+// Gif methods
+
+CImg<unsigned char> frameToCImg(SavedImage& frame, ColorMapObject* globalColorMap, CImg<unsigned char>& canvas, bool hasTransparency, int transparentIndex) {
+    GifImageDesc& desc = frame.ImageDesc;
+    ColorMapObject* colorMap = desc.ColorMap ? desc.ColorMap : globalColorMap;
+    for (int y = 0; y < desc.Height; y++) {
+        for (int x = 0; x < desc.Width; x++) {
+            int idx = frame.RasterBits[y * desc.Width + x];
+            if (hasTransparency && idx == transparentIndex) continue; // Skip transparent pixels
+            GifColorType color = colorMap->Colors[idx];
+            canvas(x + desc.Left, y + desc.Top, 0, 0) = (unsigned char)(0.299*color.Red + 0.587*color.Green + 0.114*color.Blue);
+        }
+    }
+    return canvas;
+}
+
+vector<GifFrame> gifToCImgs(string inputFile) {
+    int error;
+    GifFileType* gif = DGifOpenFileName(inputFile.c_str(), &error);
+    DGifSlurp(gif);
+
+    vector<GifFrame> frames;
+    CImg<unsigned char> canvas(gif->SWidth, gif->SHeight, 1, 1, 0);
+    for (int i = 0; i < gif->ImageCount; i++) {
+        CImg<unsigned char> previous = canvas;
+        SavedImage& frame = gif->SavedImages[i];
+
+        // Extract transparency and disposal before applying frame
+        GraphicsControlBlock gcb;
+        DGifSavedExtensionToGCB(gif, i, &gcb);
+
+        bool hasTransparency = gcb.TransparentColor != NO_TRANSPARENT_COLOR;
+        int transparentIndex = gcb.TransparentColor;
+        int disposal = gcb.DisposalMode;
+        int delay = gcb.DelayTime;
+
+        CImg<unsigned char> image = frameToCImg(frame, gif->SColorMap, canvas, hasTransparency, transparentIndex);
+        GifFrame frameData(image, delay);
+
+        frames.push_back(frameData);
+
+        if (disposal == 2) {
+            canvas.fill(0);
+        } else if (disposal == 3) {
+            canvas = previous;
+        }
+    }
+
+    DGifCloseFile(gif, &error);
+    return frames;
+}
+
+vector<GifFrame> convertGif(string inputFile, string characterSetFile, int outputWidth, float charAspect, bool invert) {
+    vector<GifFrame> frames = gifToCImgs(inputFile);
+
+    vector<string> characterSet = getCharacterSet(characterSetFile);
+
+    map<int, string> mapping = mapCharacterDensity(characterSet, frames);
+
+    vector<GifFrame> convertedFrames;
+    for (GifFrame frameData : frames) {
+
+        CImg<unsigned char> frame = frameData.image;
+
+        if (invert) {
+            frame = 255 - frame;
+        }
+
+        CImg<unsigned char> resizedFrame = resizeImage(frame, outputWidth, charAspect);
+
+        frameData.ascii = renderImage(resizedFrame, mapping);
+
+        convertedFrames.push_back(frameData);
+    }
+
+    return convertedFrames;
 }
 
 int main(int argc, char* argv[]) {
@@ -90,13 +169,37 @@ int main(int argc, char* argv[]) {
         invert = true;
     }
 
-    CImg<unsigned char> image(inputFile.c_str());
-    vector<string> output = convertImage(image, characterSetFile, width, charAspect, invert);
+    if (inputFile.substr(inputFile.find_last_of(".") + 1) == "png" || inputFile.substr(inputFile.find_last_of(".") + 1) == "jpg" || inputFile.substr(inputFile.find_last_of(".") + 1) == "jpeg") {
+        CImg<unsigned char> image(inputFile.c_str());
+        vector<string> output = convertImage(image, characterSetFile, width, charAspect, invert);
 
-    // Output image!
-    cout << "\n";
-    for (string line: output) {
-        cout << line << "\n";
+        // Output image!
+        cout << "\n";
+        for (string line: output) {
+            cout << line << "\n";
+        }
+        cout << "\n";
+    } else if (inputFile.substr(inputFile.find_last_of(".") + 1) == "gif") {
+        vector<GifFrame> convertedFrames = convertGif(inputFile, characterSetFile, width, charAspect, invert);
+
+        int frameHeight = 0;
+        int frameCounter = 0;
+        while(true) {
+            GifFrame frameData = convertedFrames[frameCounter];
+
+            vector<string> frame = frameData.ascii;
+
+            cout << "\033[" << frameHeight << "A";
+            frameHeight = frame.size() + 1; // + 1 for the \n
+            cout << "\n";
+            for (string line: frame) {
+                cout << line << "\n";
+            }
+            usleep(frameData.delay * 10000);
+
+            frameCounter = (frameCounter + 1) % convertedFrames.size();
+        }
+    } else {
+        cout << "Input file must be a jpg, png, or gif" << "\n";
     }
-    cout << "\n";
 }
