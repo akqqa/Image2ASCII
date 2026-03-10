@@ -40,7 +40,12 @@ Further options include:
 
 ## Features
 
-tba
+- Allows a GIF to be converted into ASCII art.
+- Allows a default character set to be used, OR a custom file with all characters to be used.
+    - Custom files need characters ordered from highest to lowest density.
+- Allows the size of the output gif to be chosen in terms of width (how many characters wide).
+- Allows the aspect ratio of text characters to be input, to ensure the output gif is not warped in the chosen display font.
+- Allows the gif to be inverted before conversion.
 
 ## Compilation
 
@@ -52,4 +57,18 @@ Note that giflib, boost, libjpeg, libpng, and libx11 must be installed on the sy
 
 ## Usage
 
-tba
+For basic usage, run the command as follows:
+
+```gif2ASCII <path/to/gif>```
+
+This will output the converted text in the terminal with the default settings defined in the program. It will loop until manually stopped.
+
+Further options include:
+
+```-c <path/to/characterset>```: The path of the character set file to use
+
+```-w <width>```: The number of characters wide the output should be
+
+```-a <ratio>```: The aspect ratio of the font used to display the result. (For example, if the font is 20px tall and 10px wide, the ratio should be set to 0.5)
+
+```-v```: Invert the input gif
